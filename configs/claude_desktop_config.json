@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "sleeper": {
+      "command": "go",
+      "args": ["run", "cmd/server/main.go"],
+      "cwd": "/path/to/sleeper-mcp-server"
+    }
+  }
+}

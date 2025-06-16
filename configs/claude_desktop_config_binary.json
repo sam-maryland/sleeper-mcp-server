@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "sleeper": {
+      "command": "/path/to/sleeper-mcp-server/sleeper-mcp-server"
+    }
+  }
+}
