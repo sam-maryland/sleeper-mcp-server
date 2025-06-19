@@ -294,6 +294,27 @@ type Metadata struct {
 - Sample player database for testing
 - Various transaction scenarios
 
+### Test Validation Requirements
+
+**CRITICAL**: After every body of changes, run the full test suite to validate:
+
+```bash
+make test
+```
+
+This command runs:
+1. **Unit tests**: `go test -count=1 ./...`
+2. **Integration tests**: `go test -count=1 -tags=integration ./...`
+
+**Required for all changes**:
+- New feature implementations
+- Bug fixes
+- Refactoring
+- Documentation updates that affect code
+- Configuration changes
+
+**Test failure policy**: All tests must pass before committing changes or considering work complete.
+
 ## Performance Considerations
 
 ### Optimization Strategies

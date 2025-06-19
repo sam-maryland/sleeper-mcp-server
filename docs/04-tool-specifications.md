@@ -26,22 +26,48 @@ Start with these essential tools that provide immediate value and demonstrate co
 **AI Context**: "Provides essential league context for all other analysis. Use this first to understand scoring rules and roster structure."
 
 ### Tool: `get_league_standings`
-**Purpose**: Get current league standings with wins, losses, and points
+**Purpose**: Get current league standings with wins, losses, points scored, and playoff positioning. Supports custom tiebreaker rules.
 
 **Parameters**:
 ```json
 {
-  "league_id": "string (required) - The Sleeper league ID"
+  "league_id": "string (required) - The Sleeper league ID",
+  "tiebreak_order": "array (optional) - Custom tiebreaker order. Options: wins, points_for, points_against, head_to_head, division_record, custom",
+  "custom_metrics": "object (optional) - Custom metrics for tiebreakers (e.g., all_play_record, bench_points, etc.)",
+  "instructions": "string (optional) - Natural language instructions for standings calculation (e.g., 'When teams have the same wins, use head-to-head record first, then points for')",
+  "mode": "string (optional) - 'regular_season' (default) or 'final' - determines which weeks to include in calculations"
 }
 ```
 
 **Response Data**:
-- Team rankings by wins/losses
-- Total points scored by each team
-- Playoff positioning
+- Team rankings by wins/losses with flexible tiebreaker support
+- Total points scored and allowed by each team
+- Playoff positioning and division information
 - Team owner information
+- Head-to-head records (when applicable)
+- Tiebreaker notes showing which rules were applied
+- Custom metrics (if provided)
 
-**AI Context**: "Shows competitive landscape. Useful for trade analysis (identify buyers vs sellers) and league context."
+**Tiebreaker Options**:
+- `wins` - Win-loss record (standard)
+- `points_for` - Total points scored
+- `points_against` - Total points allowed (lower is better)
+- `head_to_head` - Head-to-head record calculated from matchup data
+- `division_record` - Division win-loss record (future enhancement)
+- `custom` - User-defined custom metrics
+
+**Natural Language Processing**: The tool can parse instructions like:
+- "When teams have the same wins, use head-to-head record first, then points for"
+- "Use head-to-head record as first tiebreaker, then total points scored"
+- "Tiebreakers: H2H, points for, points against"
+
+**Modes**:
+- `regular_season` (default): Uses weeks 1-14 for calculations
+- `final`: Uses all weeks 1-18, including playoff results
+
+**League Integration**: Automatically detects and uses the league's `playoff_seed_type` setting from Sleeper if no custom tiebreaker order is provided.
+
+**AI Context**: "Shows competitive landscape with flexible ranking rules that can be described in natural language. Perfect for leagues with complex custom tiebreaker systems like the example in 05-example-custom-standings.md. Can handle sophisticated instructions about how standings should be calculated, including head-to-head records and different modes for regular season vs final standings."
 
 ## Tool Category 2: Roster Management
 

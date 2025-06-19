@@ -38,6 +38,9 @@ func NewSleeperMCPServer(logger *logrus.Logger) *server.DefaultServer {
 	s.HandleListTools(func(ctx context.Context, cursor *string) (*mcp.ListToolsResult, error) {
 		tools := []mcp.Tool{
 			leagueHandler.GetLeagueInfoTool(),
+			leagueHandler.GetLeagueStandingsTool(),
+			leagueHandler.GetLeagueUsersTool(),
+			leagueHandler.GetMatchupsTool(),
 		}
 		
 		logger.WithField("tools_count", len(tools)).Info("Listing available tools")
@@ -58,6 +61,12 @@ func NewSleeperMCPServer(logger *logrus.Logger) *server.DefaultServer {
 		switch name {
 		case "get_league_info":
 			return leagueHandler.HandleGetLeagueInfo(ctx, arguments)
+		case "get_league_standings":
+			return leagueHandler.HandleGetLeagueStandings(ctx, arguments)
+		case "get_league_users":
+			return leagueHandler.HandleGetLeagueUsers(ctx, arguments)
+		case "get_matchups":
+			return leagueHandler.HandleGetMatchups(ctx, arguments)
 		default:
 			logger.WithField("tool", name).Warn("Unknown tool called")
 			return &mcp.CallToolResult{

@@ -73,12 +73,30 @@ The server uses STDIO transport and should work with any MCP-compatible client. 
 ### Available Tools
 
 - `get_league_info` - Get comprehensive league information including settings, scoring rules, and metadata
+- `get_league_standings` - Get current standings with flexible tiebreaker support (accepts custom instructions)
+- `get_league_users` - Get all league members and their team information
+- `get_matchups` - Get weekly matchup data and scores
 
 ### Example Usage
 
 Once configured, you can ask Claude:
 
-> "Get information about my Sleeper league with ID 12345678901"
+- "Get information about my Sleeper league with ID YOUR_LEAGUE_ID"
+- "Show me the current standings for league YOUR_LEAGUE_ID"
+- "Get the standings for league YOUR_LEAGUE_ID using custom tiebreakers: when teams have the same wins, use head-to-head record first, then points for"
+- "Who are all the users in league YOUR_LEAGUE_ID?"
+- "Show me the matchups for week 1 in league YOUR_LEAGUE_ID"
+
+### Testing Your Setup
+
+After configuration, test the setup:
+
+1. **Restart Claude Desktop** to load the new configuration
+2. **Start a new conversation** and try a simple command:
+   > "Get information about Sleeper league YOUR_LEAGUE_ID"
+3. **Verify the server is working** - you should see league details returned
+
+If you encounter issues, check the Claude Desktop logs or run the server manually to see error output.
 
 ## Development
 

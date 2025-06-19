@@ -240,6 +240,435 @@ func TestLeagueHandler_HandleGetLeagueInfo(t *testing.T) {
 	}
 }
 
+func TestLeagueHandler_GetLeagueStandingsTool(t *testing.T) {
+	logger, _ := test.NewNullLogger()
+	mockClient := &MockSleeperClient{}
+	handler := NewLeagueHandler(mockClient, logger)
+
+	tool := handler.GetLeagueStandingsTool()
+
+	if tool.Name != "get_league_standings" {
+		t.Errorf("Expected tool name 'get_league_standings', got '%s'", tool.Name)
+	}
+
+	if tool.Description == "" {
+		t.Error("Expected tool description to be set")
+	}
+}
+
+func TestLeagueHandler_HandleGetLeagueStandings(t *testing.T) {
+	logger, _ := test.NewNullLogger()
+	
+	mockLeague := &sleeper.League{
+		LeagueID: "test123",
+		Name:     "Test League",
+		Settings: sleeper.LeagueSettings{
+			PlayoffSeedType: 0, // Standard tiebreaker
+		},
+	}
+	
+	mockRosters := []sleeper.Roster{
+		{
+			RosterID: 1,
+			OwnerID:  "user1",
+			Settings: sleeper.RosterSettings{
+				Wins:         10,
+				Losses:       3,
+				Ties:         0,
+				FPTS:         1500.5,
+				FPTSAgainst:  1200.2,
+			},
+		},
+		{
+			RosterID: 2,
+			OwnerID:  "user2",
+			Settings: sleeper.RosterSettings{
+				Wins:         8,
+				Losses:       5,
+				Ties:         0,
+				FPTS:         1400.3,
+				FPTSAgainst:  1300.1,
+			},
+		},
+	}
+	
+	mockUsers := []sleeper.User{
+		{
+			UserID:      "user1",
+			DisplayName: "Player One",
+		},
+		{
+			UserID:      "user2", 
+			DisplayName: "Player Two",
+		},
+	}
+	
+	mockClient := &MockSleeperClient{
+		GetLeagueFunc: func(leagueID string) (*sleeper.League, error) {
+			return mockLeague, nil
+		},
+		GetLeagueRostersFunc: func(leagueID string) ([]sleeper.Roster, error) {
+			return mockRosters, nil
+		},
+		GetLeagueUsersFunc: func(leagueID string) ([]sleeper.User, error) {
+			return mockUsers, nil
+		},
+	}
+	
+	handler := NewLeagueHandler(mockClient, logger)
+	ctx := context.Background()
+	args := map[string]interface{}{
+		"league_id": "test123",
+	}
+
+	result, err := handler.HandleGetLeagueStandings(ctx, args)
+
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Error("Expected result but got nil")
+	}
+
+	if result.IsError {
+		t.Error("Expected successful result but got error")
+	}
+
+	if len(result.Content) == 0 {
+		t.Error("Expected content in result")
+	}
+}
+
+func TestLeagueHandler_HandleGetLeagueStandings_CustomTiebreakers(t *testing.T) {
+	logger, _ := test.NewNullLogger()
+	
+	mockLeague := &sleeper.League{
+		LeagueID: "test123",
+		Name:     "Test League",
+		Settings: sleeper.LeagueSettings{
+			PlayoffSeedType: 0,
+		},
+	}
+	
+	mockRosters := []sleeper.Roster{
+		{
+			RosterID: 1,
+			OwnerID:  "user1",
+			Settings: sleeper.RosterSettings{
+				Wins:         10,
+				Losses:       3,
+				Ties:         0,
+				FPTS:         1500.5,
+				FPTSAgainst:  1200.2,
+			},
+		},
+		{
+			RosterID: 2,
+			OwnerID:  "user2",
+			Settings: sleeper.RosterSettings{
+				Wins:         10, // Same wins as user1
+				Losses:       3,
+				Ties:         0,
+				FPTS:         1400.3, // Lower points than user1
+				FPTSAgainst:  1100.1, // Lower points against
+			},
+		},
+	}
+	
+	mockUsers := []sleeper.User{
+		{
+			UserID:      "user1",
+			DisplayName: "Player One",
+		},
+		{
+			UserID:      "user2", 
+			DisplayName: "Player Two",
+		},
+	}
+	
+	mockClient := &MockSleeperClient{
+		GetLeagueFunc: func(leagueID string) (*sleeper.League, error) {
+			return mockLeague, nil
+		},
+		GetLeagueRostersFunc: func(leagueID string) ([]sleeper.Roster, error) {
+			return mockRosters, nil
+		},
+		GetLeagueUsersFunc: func(leagueID string) ([]sleeper.User, error) {
+			return mockUsers, nil
+		},
+	}
+	
+	handler := NewLeagueHandler(mockClient, logger)
+	ctx := context.Background()
+	
+	// Test with custom tiebreaker order: points_against first, then points_for
+	args := map[string]interface{}{
+		"league_id": "test123",
+		"tiebreak_order": []interface{}{"wins", "points_against", "points_for"},
+	}
+
+	result, err := handler.HandleGetLeagueStandings(ctx, args)
+
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Error("Expected result but got nil")
+	}
+
+	if result.IsError {
+		t.Error("Expected successful result but got error")
+	}
+
+	if len(result.Content) == 0 {
+		t.Error("Expected content in result")
+	}
+}
+
+func TestLeagueHandler_GetLeagueUsersTool(t *testing.T) {
+	logger, _ := test.NewNullLogger()
+	mockClient := &MockSleeperClient{}
+	handler := NewLeagueHandler(mockClient, logger)
+
+	tool := handler.GetLeagueUsersTool()
+
+	if tool.Name != "get_league_users" {
+		t.Errorf("Expected tool name 'get_league_users', got '%s'", tool.Name)
+	}
+
+	if tool.Description == "" {
+		t.Error("Expected tool description to be set")
+	}
+}
+
+func TestLeagueHandler_HandleGetLeagueUsers(t *testing.T) {
+	logger, _ := test.NewNullLogger()
+	
+	mockUsers := []sleeper.User{
+		{
+			UserID:      "user1",
+			Username:    "player1",
+			DisplayName: "Player One",
+		},
+		{
+			UserID:      "user2",
+			Username:    "player2", 
+			DisplayName: "Player Two",
+		},
+	}
+	
+	mockClient := &MockSleeperClient{
+		GetLeagueUsersFunc: func(leagueID string) ([]sleeper.User, error) {
+			return mockUsers, nil
+		},
+	}
+	
+	handler := NewLeagueHandler(mockClient, logger)
+	ctx := context.Background()
+	args := map[string]interface{}{
+		"league_id": "test123",
+	}
+
+	result, err := handler.HandleGetLeagueUsers(ctx, args)
+
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Error("Expected result but got nil")
+	}
+
+	if result.IsError {
+		t.Error("Expected successful result but got error")
+	}
+
+	if len(result.Content) == 0 {
+		t.Error("Expected content in result")
+	}
+}
+
+func TestLeagueHandler_GetMatchupsTool(t *testing.T) {
+	logger, _ := test.NewNullLogger()
+	mockClient := &MockSleeperClient{}
+	handler := NewLeagueHandler(mockClient, logger)
+
+	tool := handler.GetMatchupsTool()
+
+	if tool.Name != "get_matchups" {
+		t.Errorf("Expected tool name 'get_matchups', got '%s'", tool.Name)
+	}
+
+	if tool.Description == "" {
+		t.Error("Expected tool description to be set")
+	}
+}
+
+func TestLeagueHandler_HandleGetMatchups(t *testing.T) {
+	logger, _ := test.NewNullLogger()
+	
+	mockMatchups := []sleeper.Matchup{
+		{
+			RosterID:  1,
+			MatchupID: 1,
+			Points:    125.5,
+		},
+		{
+			RosterID:  2,
+			MatchupID: 1,
+			Points:    132.3,
+		},
+	}
+	
+	mockClient := &MockSleeperClient{
+		GetMatchupsFunc: func(leagueID string, week int) ([]sleeper.Matchup, error) {
+			return mockMatchups, nil
+		},
+	}
+	
+	handler := NewLeagueHandler(mockClient, logger)
+	ctx := context.Background()
+	args := map[string]interface{}{
+		"league_id": "test123",
+		"week":      float64(1), // JSON numbers are parsed as float64
+	}
+
+	result, err := handler.HandleGetMatchups(ctx, args)
+
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Error("Expected result but got nil")
+	}
+
+	if result.IsError {
+		t.Error("Expected successful result but got error")
+	}
+
+	if len(result.Content) == 0 {
+		t.Error("Expected content in result")
+	}
+}
+
+func TestLeagueHandler_HandleGetMatchups_InvalidWeek(t *testing.T) {
+	logger, _ := test.NewNullLogger()
+	mockClient := &MockSleeperClient{}
+	handler := NewLeagueHandler(mockClient, logger)
+	ctx := context.Background()
+	
+	// Test invalid week range
+	args := map[string]interface{}{
+		"league_id": "test123",
+		"week":      float64(20), // Invalid week > 18
+	}
+
+	_, err := handler.HandleGetMatchups(ctx, args)
+
+	if err == nil {
+		t.Error("Expected error for invalid week")
+	}
+}
+
+func TestLeagueHandler_HandleGetLeagueStandings_Instructions(t *testing.T) {
+	logger, _ := test.NewNullLogger()
+	
+	mockLeague := &sleeper.League{
+		LeagueID: "test123",
+		Name:     "Test League",
+		Settings: sleeper.LeagueSettings{
+			PlayoffSeedType: 0,
+		},
+	}
+	
+	mockRosters := []sleeper.Roster{
+		{
+			RosterID: 1,
+			OwnerID:  "user1",
+			Settings: sleeper.RosterSettings{
+				Wins:         8,
+				Losses:       4,
+				Ties:         0,
+				FPTS:         1500.5,
+				FPTSAgainst:  1200.2,
+			},
+		},
+		{
+			RosterID: 2,
+			OwnerID:  "user2",
+			Settings: sleeper.RosterSettings{
+				Wins:         8,
+				Losses:       4,
+				Ties:         0,
+				FPTS:         1400.3,
+				FPTSAgainst:  1300.1,
+			},
+		},
+	}
+	
+	mockUsers := []sleeper.User{
+		{
+			UserID:      "user1",
+			DisplayName: "Player One",
+		},
+		{
+			UserID:      "user2", 
+			DisplayName: "Player Two",
+		},
+	}
+	
+	// Mock matchups for head-to-head calculation
+	mockMatchups := []sleeper.Matchup{
+		{RosterID: 1, MatchupID: 1, Points: 125.5}, // Team 1 vs Team 2, Team 1 wins
+		{RosterID: 2, MatchupID: 1, Points: 120.3},
+	}
+	
+	mockClient := &MockSleeperClient{
+		GetLeagueFunc: func(leagueID string) (*sleeper.League, error) {
+			return mockLeague, nil
+		},
+		GetLeagueRostersFunc: func(leagueID string) ([]sleeper.Roster, error) {
+			return mockRosters, nil
+		},
+		GetLeagueUsersFunc: func(leagueID string) ([]sleeper.User, error) {
+			return mockUsers, nil
+		},
+		GetMatchupsFunc: func(leagueID string, week int) ([]sleeper.Matchup, error) {
+			return mockMatchups, nil
+		},
+	}
+	
+	handler := NewLeagueHandler(mockClient, logger)
+	ctx := context.Background()
+	
+	// Test with natural language instructions from the example
+	args := map[string]interface{}{
+		"league_id": "test123",
+		"instructions": "When teams have the same number of wins, use head-to-head record as first tiebreaker, then points for, then points against",
+	}
+
+	result, err := handler.HandleGetLeagueStandings(ctx, args)
+
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Error("Expected result but got nil")
+	}
+
+	if result.IsError {
+		t.Error("Expected successful result but got error")
+	}
+
+	if len(result.Content) == 0 {
+		t.Error("Expected content in result")
+	}
+}
+
 func TestNewLeagueHandler(t *testing.T) {
 	logger, _ := test.NewNullLogger()
 	mockClient := &MockSleeperClient{}
