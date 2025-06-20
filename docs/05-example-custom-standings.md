@@ -124,10 +124,16 @@ This example shows how playoff performance can significantly change final rankin
 
 ## Technical Implementation Notes
 
-- **Data Sources**: Standings are calculated from matchup data stored in the database
+- **Data Sources**: Standings are calculated from matchup data retrieved via Sleeper API
 - **Real-time Updates**: Regular season standings update after each completed week
 - **Playoff Validation**: The system validates that playoff bracket data is complete and consistent before calculating final standings
 - **Tie Handling**: The system properly handles tied games (though rare in fantasy football)
+- **Mode Support**: Two calculation modes supported:
+  - `regular_season`: Uses weeks 1-14 only for standings calculation
+  - `final`: Uses all weeks 1-18 and processes playoff bracket results for final rankings
+- **Mini-League Tiebreakers**: For 3+ team ties, head-to-head records are calculated only among the tied teams
+- **Random Tiebreaker**: Consistent random IDs are generated for ultimate tiebreaker resolution
+- **Playoff Bracket Processing**: Automatically identifies and processes quarterfinals, semifinals, championship, and third-place games
 
 ## Frequently Asked Questions
 

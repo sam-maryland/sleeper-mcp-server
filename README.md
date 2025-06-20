@@ -1,62 +1,87 @@
 # Sleeper MCP Server
 
-A Model Context Protocol server for Sleeper Fantasy Football that enables AI agents to analyze leagues, manage rosters, and provide strategic insights.
+A Model Context Protocol server that connects AI agents to Sleeper Fantasy Football, enabling intelligent league analysis, roster evaluation, and strategic insights.
+
+## What This Does
+
+This MCP server allows you to ask AI agents natural language questions about your Sleeper fantasy football leagues:
+
+- **"Show me the standings for my league"** - Get current standings with custom tiebreaker support
+- **"Who are the users in my league?"** - View all league members
+- **"What were the matchups for week 5?"** - See weekly scoring and results
+- **"Calculate standings using head-to-head tiebreakers"** - Apply custom standings rules
 
 ## Quick Start
-See [docs/setup.md](docs/setup.md) for detailed setup instructions.
+
+1. **Install and configure** - See [setup instructions](docs/setup.md)
+2. **Configure your league settings** - Edit `configs/league_settings.json` with your league's custom rules
+3. **Start asking questions** - Use natural language to analyze your league
 
 ## Documentation
+
+- [Setup Instructions](docs/setup.md) - **Start here**
 - [Project Vision](docs/01-project-vision.md)
 - [API Reference](docs/02-sleeper-api-reference.md) 
-- [Implementation Guide](docs/03-implementation-guide.md)
 - [Tool Specifications](docs/04-tool-specifications.md)
 - [Custom Standings Example](docs/05-example-custom-standings.md)
-- [Development Workflow](docs/DEVELOPMENT.md) - **Required reading for contributors**
+- [Development Guide](docs/DEVELOPMENT.md) - For contributors
 
-## Features
-- League analysis and standings with flexible tiebreaker support
-- Roster management and evaluation
-- Player trends and waiver wire insights
-- Trade analysis and suggestions
-- Natural language instruction parsing for custom standings
+## Key Features
 
-## Development
+- **Flexible Standings**: Supports custom tiebreaker rules not available in Sleeper
+- **Natural Language**: Ask questions conversationally - no need to learn APIs
+- **Agent Agnostic**: Works with Claude, ChatGPT, or any MCP-compatible AI agent
+- **Head-to-Head Calculation**: Automatically calculates complex tiebreakers from matchup data
+- **Multiple Leagues**: Handle different leagues with different rule sets
 
-### Testing
-**Critical**: Always run tests after making changes:
+## Setting Up Your League
 
-```bash
-make test
+### 1. Configure Your League Settings
+
+Edit `configs/league_settings.json` to add your league's information. Copy the template and replace with your details:
+
+```json
+{
+  "leagues": {
+    "1234567890123456789": {
+      "name": "My Fantasy League",
+      "description": "League with custom head-to-head tiebreakers",
+      "custom_standings": {
+        "enabled": true,
+        "instructions": "When teams have the same wins, use head-to-head record first, then points for, then points against",
+        "tiebreak_order": ["wins", "head_to_head", "points_for", "points_against"],
+        "notes": "This league uses custom tiebreakers not supported by Sleeper natively"
+      }
+    }
+  }
+}
 ```
 
-This runs both unit and integration tests. All tests must pass before committing.
+### 2. Example Conversations
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for complete development workflow.
+Once configured, you can ask your AI agent:
 
-### Building
-```bash
-make build
-```
+- **"What are the current standings in my league?"**
+- **"Show me the standings with our custom head-to-head tiebreakers"**
+- **"Who beat who this week in my league?"**
+- **"Compare the playoff seeding using our league rules"**
 
-### Running
-```bash
-make dev
-```
+## For Developers
 
-### Testing via MCP Protocol
-Test the server through Claude Desktop or other MCP clients:
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for:
+- Development workflow and testing
+- Contributing guidelines  
+- Adding new features
+- Building and deployment
 
-```bash
-# See MCP testing setup instructions
-make test-mcp
-```
+## How It Works
 
-1. Configure Claude Desktop with the server (see `configs/claude_desktop_config.json`)
-2. Test with natural language commands like:
-   - "Get standings for league YOUR_LEAGUE_ID"  
-   - "Show users in league YOUR_LEAGUE_ID"
+1. **You ask your AI agent** about your league in natural language
+2. **The agent uses this MCP server** to fetch data from Sleeper's API
+3. **Custom calculations are applied** based on your `configs/league_settings.json`
+4. **You get intelligent analysis** tailored to your league's rules
 
-This tests both MCP integration and tool functionality as intended.
+The server automatically applies your league's custom settings, so you don't need to explain the rules every time.
 
 ## License
 MIT License - see LICENSE file

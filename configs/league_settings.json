@@ -1,0 +1,49 @@
+{
+  "_instructions": "Add your league configurations below. Copy the example template for each league you want to configure with custom settings.",
+  "_terminology_note": "When users refer to 'league', they typically mean the multi-season league history (all years combined). When referring to a specific Sleeper league ID, they may call it a 'season' or 'year'.",
+  "leagues": {
+    "EXAMPLE_LEAGUE_ID_123456789": {
+      "name": "Example Custom League",
+      "description": "Example template for other users",
+      "custom_standings": {
+        "enabled": true,
+        "instructions": "When teams have the same wins, use head-to-head record first, then points for, then points against",
+        "tiebreak_order": [
+          "wins",
+          "head_to_head",
+          "points_for",
+          "points_against"
+        ],
+        "notes": "This league uses custom tiebreakers not natively supported by Sleeper. Head-to-head record is calculated from actual matchup data."
+      }
+    }
+  },
+  "default_settings": {
+    "custom_standings": {
+      "enabled": false,
+      "instructions": "Use Sleeper default tiebreakers (wins, then points for)",
+      "tiebreak_order": [
+        "wins",
+        "points_for"
+      ],
+      "notes": "Standard Sleeper tiebreaker rules apply"
+    }
+  },
+  "_template": {
+    "YOUR_LEAGUE_ID_HERE": {
+      "name": "Your League Name",
+      "description": "Brief description of your league's special rules",
+      "custom_standings": {
+        "enabled": true,
+        "instructions": "Describe your tiebreaker rules in natural language",
+        "tiebreak_order": [
+          "wins",
+          "head_to_head",
+          "points_for",
+          "points_against"
+        ],
+        "notes": "Any additional notes about how your league calculates standings"
+      }
+    }
+  }
+}

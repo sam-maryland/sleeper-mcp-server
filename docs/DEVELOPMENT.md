@@ -149,7 +149,22 @@ All changes must pass these gates:
 - [ ] TodoWrite tracking is complete
 - [ ] Changes follow existing code patterns
 
-## 9. Best Practices
+## 9. League Configuration
+
+### League Settings File
+- League-specific configurations are stored in `configs/league_settings.json`
+- Custom standings calculations can be pre-configured per league
+- The server automatically applies league-specific rules when processing requests
+- Works with any MCP-compatible AI agent (Claude, ChatGPT, etc.)
+
+### Configuration Structure
+Each league can have:
+- Custom tiebreaker instructions in natural language
+- Specific tiebreaker ordering
+- Additional notes about league rules
+- Enable/disable flags for custom calculations
+
+## 10. Best Practices
 
 ### Testing
 - Write tests for both success and error cases
@@ -168,8 +183,9 @@ All changes must pass these gates:
 - Add examples for complex features
 - Document any breaking changes
 - Keep README.md current
+- Update `league_settings.json` when league-specific behavior changes
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 ### Common Test Failures
 - **Import cycle**: Check for circular dependencies
