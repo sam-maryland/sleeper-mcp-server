@@ -109,6 +109,19 @@ type Matchup struct {
 	CustomPoints   map[string]float64     `json:"custom_points"`
 }
 
+// BracketMatchup represents a playoff bracket matchup from Sleeper's bracket API
+type BracketMatchup struct {
+	MatchupID    int                    `json:"m"`     // matchup number
+	Round        int                    `json:"r"`     // round (1=quarterfinals, 2=semifinals, 3=finals)
+	Winner       int                    `json:"w"`     // winner roster ID
+	Loser        int                    `json:"l"`     // loser roster ID
+	Team1        int                    `json:"t1"`    // team 1 roster ID
+	Team2        int                    `json:"t2"`    // team 2 roster ID
+	PlayoffWeek  *int                   `json:"p,omitempty"` // playoff week (when specified)
+	Team1From    map[string]interface{} `json:"t1_from,omitempty"` // where team1 came from
+	Team2From    map[string]interface{} `json:"t2_from,omitempty"` // where team2 came from
+}
+
 // Transaction represents a league transaction
 type Transaction struct {
 	TransactionID string                 `json:"transaction_id"`

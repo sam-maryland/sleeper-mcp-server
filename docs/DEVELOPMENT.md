@@ -178,6 +178,12 @@ Each league can have:
 - Include appropriate logging
 - Use existing utility functions when possible
 
+### API Integration Principles
+- **Use authoritative data sources**: Always prefer explicit API fields over inference
+- **Leverage Sleeper's structured data**: Use bracket endpoints (`/winners_bracket`, `/losers_bracket`) for definitive playoff results
+- **Avoid assumptions**: Don't infer game types (championship vs third place) from patterns - use Sleeper's explicit bracket data
+- **Trust the source**: Sleeper's API provides authoritative bracket structure, matchup results, and playoff positioning
+
 ### Documentation
 - Update tool specifications for API changes
 - Add examples for complex features

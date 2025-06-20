@@ -80,6 +80,7 @@ type PlayoffBracket struct {
 	SemifinalsWeek    int                        `json:"semifinals_week"`
 	ChampionshipWeek  int                        `json:"championship_week"`
 	ThirdPlaceWeek    int                        `json:"third_place_week"`
+	HasThirdPlace     bool                       `json:"has_third_place"`
 	QuarterFinals     []PlayoffMatchup           `json:"quarterfinals"`
 	SemiFinals        []PlayoffMatchup           `json:"semifinals"`
 	Championship      *PlayoffMatchup            `json:"championship"`
@@ -98,6 +99,16 @@ type PlayoffMatchup struct {
 	Winner      int     `json:"winner_roster_id"`
 	Loser       int     `json:"loser_roster_id"`
 	GameType    string  `json:"game_type"` // "quarterfinal", "semifinal", "championship", "third_place"
+}
+
+// PlayoffStructure represents the detected playoff schedule and format
+type PlayoffStructure struct {
+	QuarterfinalsWeek int `json:"quarterfinals_week"`
+	SemifinalsWeek    int `json:"semifinals_week"`
+	ChampionshipWeek  int `json:"championship_week"`
+	ThirdPlaceWeek    int `json:"third_place_week"`
+	Format            string `json:"format"` // "6team", "4team", "8team", etc.
+	HasThirdPlace     bool `json:"has_third_place"`
 }
 
 // LeagueHandler handles league-related MCP tools
@@ -1082,20 +1093,15 @@ func (h *LeagueHandler) calculateHeadToHeadMatrix(leagueID, mode string) (map[in
 // processPlayoffBracket analyzes playoff bracket results and determines final standings
 func (h *LeagueHandler) processPlayoffBracket(leagueID string, league *sleeper.League, regularSeasonStandings []StandingEntry) (*PlayoffBracket, error) {
 	bracket := &PlayoffBracket{
-		PlayoffTeams: make(map[int]int),
+		PlayoffTeams:  make(map[int]int),
+		HasThirdPlace: true, // Default assumption
 	}
 	
-	// Determine playoff weeks based on league settings
+	// Determine playoff teams based on league settings and regular season standings
 	playoffTeams := 6 // Default
 	if league.Settings.PlayoffTeams > 0 {
 		playoffTeams = league.Settings.PlayoffTeams
 	}
-	
-	// Standard playoff structure for 6 teams: weeks 15 (quarterfinals), 16 (semifinals), 17 (championship & 3rd place)
-	bracket.QuarterfinalsWeek = 15
-	bracket.SemifinalsWeek = 16
-	bracket.ChampionshipWeek = 17
-	bracket.ThirdPlaceWeek = 17
 	
 	// Map top teams to playoff seeds based on regular season standings
 	for i, team := range regularSeasonStandings {
@@ -1104,22 +1110,113 @@ func (h *LeagueHandler) processPlayoffBracket(leagueID string, league *sleeper.L
 		}
 	}
 	
-	// Process quarterfinals (seeds 3v6, 4v5)
-	if err := h.processPlayoffWeek(leagueID, bracket, bracket.QuarterfinalsWeek, "quarterfinal"); err != nil {
-		return nil, fmt.Errorf("failed to process quarterfinals: %w", err)
+	// Get authoritative bracket data from Sleeper API
+	winnersBracket, err := h.client.GetWinnersBracket(leagueID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get winners bracket: %w", err)
 	}
 	
-	// Process semifinals
-	if err := h.processPlayoffWeek(leagueID, bracket, bracket.SemifinalsWeek, "semifinal"); err != nil {
-		return nil, fmt.Errorf("failed to process semifinals: %w", err)
-	}
-	
-	// Process championship and third place games
-	if err := h.processPlayoffWeek(leagueID, bracket, bracket.ChampionshipWeek, "championship"); err != nil {
-		return nil, fmt.Errorf("failed to process championship week: %w", err)
+	// Process winners bracket to identify championship and other games
+	if err := h.processBracketFromAPI(bracket, winnersBracket); err != nil {
+		return nil, fmt.Errorf("failed to process bracket from API: %w", err)
 	}
 	
 	return bracket, nil
+}
+
+// processBracketFromAPI processes the authoritative bracket data from Sleeper's API
+func (h *LeagueHandler) processBracketFromAPI(bracket *PlayoffBracket, winnersBracket []sleeper.BracketMatchup) error {
+	// Find the championship game (highest round)
+	var championshipGame *sleeper.BracketMatchup
+	var thirdPlaceGame *sleeper.BracketMatchup
+	maxRound := 0
+	
+	// Identify the highest round (championship)
+	for _, game := range winnersBracket {
+		if game.Round > maxRound {
+			maxRound = game.Round
+		}
+	}
+	
+	// Find championship and third place games in the highest round
+	for i, game := range winnersBracket {
+		if game.Round == maxRound {
+			// In the final round, there are typically 2 games:
+			// - One championship game (usually has PlayoffWeek=1 or lower matchup ID)
+			// - One third place game (usually has PlayoffWeek=3 or higher matchup ID)
+			if game.PlayoffWeek != nil && *game.PlayoffWeek == 1 {
+				championshipGame = &winnersBracket[i]
+			} else if game.PlayoffWeek != nil && *game.PlayoffWeek == 3 {
+				thirdPlaceGame = &winnersBracket[i]
+			} else if championshipGame == nil {
+				// Fallback: first game in final round is championship
+				championshipGame = &winnersBracket[i]
+			} else if thirdPlaceGame == nil {
+				// Fallback: second game in final round is third place
+				thirdPlaceGame = &winnersBracket[i]
+			}
+		}
+	}
+	
+	if championshipGame == nil {
+		return fmt.Errorf("championship game not found in bracket data")
+	}
+	
+	// Convert championship game to our format
+	bracket.Championship = &PlayoffMatchup{
+		Week:        17, // Assume championship weeks
+		MatchupID:   championshipGame.MatchupID,
+		Team1:       championshipGame.Team1,
+		Team2:       championshipGame.Team2,
+		Winner:      championshipGame.Winner,
+		Loser:       championshipGame.Loser,
+		GameType:    "championship",
+	}
+	
+	// Convert third place game if found
+	if thirdPlaceGame != nil {
+		bracket.ThirdPlace = &PlayoffMatchup{
+			Week:        17, // Assume same weeks as championship
+			MatchupID:   thirdPlaceGame.MatchupID,
+			Team1:       thirdPlaceGame.Team1,
+			Team2:       thirdPlaceGame.Team2,
+			Winner:      thirdPlaceGame.Winner,
+			Loser:       thirdPlaceGame.Loser,
+			GameType:    "third_place",
+		}
+		bracket.HasThirdPlace = true
+	}
+	
+	// Process other rounds for quarterfinals and semifinals
+	for _, game := range winnersBracket {
+		playoffMatchup := PlayoffMatchup{
+			Week:        15 + game.Round - 1, // Rough mapping: Round 1=Week 15, etc.
+			MatchupID:   game.MatchupID,
+			Team1:       game.Team1,
+			Team2:       game.Team2,
+			Winner:      game.Winner,
+			Loser:       game.Loser,
+		}
+		
+		switch game.Round {
+		case 1:
+			playoffMatchup.GameType = "quarterfinal"
+			bracket.QuarterFinals = append(bracket.QuarterFinals, playoffMatchup)
+		case 2:
+			playoffMatchup.GameType = "semifinal"
+			bracket.SemiFinals = append(bracket.SemiFinals, playoffMatchup)
+		}
+	}
+	
+	h.logger.WithFields(map[string]interface{}{
+		"championship_winner": bracket.Championship.Winner,
+		"championship_loser":  bracket.Championship.Loser,
+		"third_place_winner":  func() int { if bracket.ThirdPlace != nil { return bracket.ThirdPlace.Winner }; return 0 }(),
+		"quarterfinals_count": len(bracket.QuarterFinals),
+		"semifinals_count":    len(bracket.SemiFinals),
+	}).Info("Processed bracket from authoritative Sleeper API data")
+	
+	return nil
 }
 
 // processPlayoffWeek processes all playoff games for a specific week
@@ -1348,19 +1445,23 @@ func (h *LeagueHandler) validatePlayoffBracket(bracket *PlayoffBracket) error {
 		return fmt.Errorf("championship game not found")
 	}
 	
-	if bracket.ThirdPlace == nil {
+	if bracket.ThirdPlace == nil && bracket.HasThirdPlace {
 		return fmt.Errorf("third place game not found")
 	}
 	
-	// Validate that semifinal winners are in the championship game
-	semifinalWinners := make([]int, 0, 2)
-	for _, semifinal := range bracket.SemiFinals {
-		semifinalWinners = append(semifinalWinners, semifinal.Winner)
-	}
-	
-	championshipParticipants := []int{bracket.Championship.Team1, bracket.Championship.Team2}
-	if !containsAllTeams(championshipParticipants, semifinalWinners) {
-		return fmt.Errorf("championship game participants don't match semifinal winners")
+	// For 2-week championship format, we don't validate semifinal winners in championship
+	// because all 4 semifinal participants compete in the 4-team finals
+	if bracket.ChampionshipWeek != 17 || !bracket.HasThirdPlace {
+		// Only validate traditional format
+		semifinalWinners := make([]int, 0, 2)
+		for _, semifinal := range bracket.SemiFinals {
+			semifinalWinners = append(semifinalWinners, semifinal.Winner)
+		}
+		
+		championshipParticipants := []int{bracket.Championship.Team1, bracket.Championship.Team2}
+		if !containsAllTeams(championshipParticipants, semifinalWinners) {
+			return fmt.Errorf("championship game participants don't match semifinal winners")
+		}
 	}
 	
 	return nil
@@ -1384,6 +1485,419 @@ func containsAllTeams(actual, expected []int) bool {
 	}
 	
 	return true
+}
+
+// detectPlayoffStructure analyzes matchup patterns to determine playoff structure
+func (h *LeagueHandler) detectPlayoffStructure(leagueID string, playoffTeams map[int]int) (*PlayoffStructure, error) {
+	structure := &PlayoffStructure{
+		Format: "6team", // Default assumption
+	}
+	
+	// Analyze weeks 15-18 to detect playoff patterns
+	weekAnalysis := make(map[int]int) // week -> number of playoff teams playing
+	
+	for week := 15; week <= 18; week++ {
+		matchups, err := h.client.GetMatchups(leagueID, week)
+		if err != nil {
+			h.logger.WithField("week", week).Warn("Failed to get matchups for playoff detection")
+			continue
+		}
+		
+		// Count playoff teams in actual playoff bracket games (not consolation)
+		// Group by matchup to find games between playoff teams
+		matchupGroups := make(map[int][]sleeper.Matchup)
+		for _, matchup := range matchups {
+			matchupGroups[matchup.MatchupID] = append(matchupGroups[matchup.MatchupID], matchup)
+		}
+		
+		playoffTeamsInBracket := make(map[int]bool)
+		for _, teams := range matchupGroups {
+			if len(teams) != 2 {
+				continue
+			}
+			
+			team1, team2 := teams[0], teams[1]
+			_, isPlayoff1 := playoffTeams[team1.RosterID]
+			_, isPlayoff2 := playoffTeams[team2.RosterID]
+			
+			// Only count if BOTH teams are playoff teams (bracket game, not consolation)
+			if isPlayoff1 && isPlayoff2 {
+				playoffTeamsInBracket[team1.RosterID] = true
+				playoffTeamsInBracket[team2.RosterID] = true
+			}
+		}
+		
+		weekAnalysis[week] = len(playoffTeamsInBracket)
+		h.logger.WithFields(map[string]interface{}{
+			"week": week,
+			"playoff_teams_in_bracket": len(playoffTeamsInBracket),
+		}).Info("Playoff week analysis")
+	}
+	
+	// Determine playoff structure based on patterns
+	// Check for different playoff formats:
+	
+	// Pattern 1: Standard format (4 teams QF, 4 teams SF, 2 teams championship)
+	// Pattern 2: 6-team format with byes (4 teams QF, 4 teams SF, 2 teams in weeks 17-18)
+	
+	// Look for 4 teams playing in consecutive weeks (QF then SF)
+	if weekAnalysis[15] == 4 && weekAnalysis[16] == 4 {
+		structure.QuarterfinalsWeek = 15
+		structure.SemifinalsWeek = 16
+		
+		// For 2-week championship, need to check manually for semifinal winners
+		// since the bracket logic changes after semifinals
+		if weekAnalysis[17] == 0 && weekAnalysis[18] == 0 {
+			// This suggests 2-week championship format
+			// Verify by checking if we can find the two semifinal winners playing in weeks 17-18
+			if h.verifyTwoWeekChampionship(leagueID, playoffTeams) {
+				structure.ChampionshipWeek = 17
+				structure.ThirdPlaceWeek = 18
+				structure.HasThirdPlace = false // 2-week championship, no separate 3rd place
+			}
+		} else if weekAnalysis[17] == 2 {
+			structure.ChampionshipWeek = 17
+			structure.ThirdPlaceWeek = 17
+			structure.HasThirdPlace = true
+		}
+	} else {
+		// Try to detect other patterns
+		for week, teamsPlaying := range weekAnalysis {
+			switch teamsPlaying {
+			case 4:
+				if structure.QuarterfinalsWeek == 0 {
+					structure.QuarterfinalsWeek = week
+				} else if structure.SemifinalsWeek == 0 {
+					structure.SemifinalsWeek = week
+				}
+			case 2:
+				if structure.ChampionshipWeek == 0 {
+					structure.ChampionshipWeek = week
+					structure.ThirdPlaceWeek = week
+					structure.HasThirdPlace = true
+				}
+			}
+		}
+	}
+	
+	// Validate detected structure
+	if structure.ChampionshipWeek == 0 {
+		return nil, fmt.Errorf("could not detect championship week")
+	}
+	
+	h.logger.WithFields(map[string]interface{}{
+		"quarterfinals_week": structure.QuarterfinalsWeek,
+		"semifinals_week":    structure.SemifinalsWeek,
+		"championship_week":  structure.ChampionshipWeek,
+		"third_place_week":   structure.ThirdPlaceWeek,
+		"format":             "6team_with_2week_championship",
+	}).Info("Detected playoff structure")
+	
+	return structure, nil
+}
+
+// processPlayoffWeekImproved processes playoff games with improved team detection
+func (h *LeagueHandler) processPlayoffWeekImproved(leagueID string, bracket *PlayoffBracket, week int, gameType string) error {
+	matchups, err := h.client.GetMatchups(leagueID, week)
+	if err != nil {
+		return fmt.Errorf("failed to get matchups for week %d: %w", week, err)
+	}
+	
+	// Group matchups by matchup_id
+	matchupGroups := make(map[int][]sleeper.Matchup)
+	for _, matchup := range matchups {
+		matchupGroups[matchup.MatchupID] = append(matchupGroups[matchup.MatchupID], matchup)
+	}
+	
+	// Process each matchup group
+	for matchupID, teams := range matchupGroups {
+		if len(teams) != 2 {
+			continue // Skip invalid matchups
+		}
+		
+		team1, team2 := teams[0], teams[1]
+		
+		// Check if both teams are playoff teams
+		_, team1IsPlayoff := bracket.PlayoffTeams[team1.RosterID]
+		_, team2IsPlayoff := bracket.PlayoffTeams[team2.RosterID]
+		
+		if !team1IsPlayoff || !team2IsPlayoff {
+			// This might be a consolation game or regular season game
+			h.logger.WithFields(map[string]interface{}{
+				"week":       week,
+				"matchup_id": matchupID,
+				"team1":      team1.RosterID,
+				"team2":      team2.RosterID,
+			}).Debug("Skipping non-playoff matchup")
+			continue
+		}
+		
+		// Determine winner
+		var winner, loser int
+		if team1.Points > team2.Points {
+			winner, loser = team1.RosterID, team2.RosterID
+		} else {
+			winner, loser = team2.RosterID, team1.RosterID
+		}
+		
+		playoffMatchup := PlayoffMatchup{
+			Week:        week,
+			MatchupID:   matchupID,
+			Team1:       team1.RosterID,
+			Team2:       team2.RosterID,
+			Team1Points: team1.Points,
+			Team2Points: team2.Points,
+			Winner:      winner,
+			Loser:       loser,
+			GameType:    gameType,
+		}
+		
+		// Store the game in the appropriate bracket section
+		switch gameType {
+		case "quarterfinal":
+			bracket.QuarterFinals = append(bracket.QuarterFinals, playoffMatchup)
+		case "semifinal":
+			bracket.SemiFinals = append(bracket.SemiFinals, playoffMatchup)
+		case "championship":
+			// For championship week, we need to distinguish between championship and third place
+			if h.isChampionshipGameImproved(bracket, team1.RosterID, team2.RosterID) {
+				bracket.Championship = &playoffMatchup
+				bracket.Championship.GameType = "championship"
+			} else {
+				bracket.ThirdPlace = &playoffMatchup
+				bracket.ThirdPlace.GameType = "third_place"
+			}
+		}
+		
+		h.logger.WithFields(map[string]interface{}{
+			"week":      week,
+			"game_type": gameType,
+			"winner":    winner,
+			"loser":     loser,
+		}).Info("Processed playoff game")
+	}
+	
+	return nil
+}
+
+// isChampionshipGameImproved determines if a matchup is the championship game vs third place game
+func (h *LeagueHandler) isChampionshipGameImproved(bracket *PlayoffBracket, team1, team2 int) bool {
+	// If we have semifinal data, use it to determine championship participants
+	if len(bracket.SemiFinals) >= 2 {
+		semifinalWinners := make(map[int]bool)
+		for _, semifinal := range bracket.SemiFinals {
+			semifinalWinners[semifinal.Winner] = true
+		}
+		
+		// If both teams are semifinal winners, this is the championship
+		return semifinalWinners[team1] && semifinalWinners[team2]
+	}
+	
+	// Fallback: assume the matchup with higher-seeded teams is the championship
+	seed1, exists1 := bracket.PlayoffTeams[team1]
+	seed2, exists2 := bracket.PlayoffTeams[team2]
+	
+	if exists1 && exists2 {
+		// Lower seed numbers = higher seeds (1 is better than 2)
+		// Championship likely involves the top seeds
+		averageSeed := (seed1 + seed2) / 2
+		return averageSeed <= 2 // Top 2 average seeds likely championship
+	}
+	
+	// Default to championship if we can't determine
+	return true
+}
+
+// processTwoWeekChampionship handles 2-week championship format (weeks 17-18)
+// In this format: semifinal winners play H2H for 2 weeks, semifinal losers play H2H for 3rd place
+func (h *LeagueHandler) processTwoWeekChampionship(leagueID string, bracket *PlayoffBracket) error {
+	if len(bracket.SemiFinals) < 2 {
+		return fmt.Errorf("need semifinal results to process championship")
+	}
+	
+	// Get semifinal winners and losers
+	semifinalWinners := make([]int, 0, 2)
+	semifinalLosers := make([]int, 0, 2)
+	for _, semifinal := range bracket.SemiFinals {
+		semifinalWinners = append(semifinalWinners, semifinal.Winner)
+		semifinalLosers = append(semifinalLosers, semifinal.Loser)
+	}
+	
+	if len(semifinalWinners) != 2 {
+		return fmt.Errorf("expected 2 semifinal winners, got %d", len(semifinalWinners))
+	}
+	if len(semifinalLosers) != 2 {
+		return fmt.Errorf("expected 2 semifinal losers, got %d", len(semifinalLosers))
+	}
+	
+	// Track 2-week totals for championship game (semifinal winners)
+	championshipTotals := make(map[int]float64)
+	thirdPlaceTotals := make(map[int]float64)
+	
+	// Process weeks 17 and 18
+	for week := 17; week <= 18; week++ {
+		matchups, err := h.client.GetMatchups(leagueID, week)
+		if err != nil {
+			return fmt.Errorf("failed to get matchups for week %d: %w", week, err)
+		}
+		
+		// Find championship participants (semifinal winners) and third place participants (semifinal losers)
+		for _, matchup := range matchups {
+			if contains(semifinalWinners, matchup.RosterID) {
+				championshipTotals[matchup.RosterID] += matchup.Points
+			} else if contains(semifinalLosers, matchup.RosterID) {
+				thirdPlaceTotals[matchup.RosterID] += matchup.Points
+			}
+		}
+	}
+	
+	// Determine championship winner (higher 2-week total between semifinal winners)
+	var champion, runnerUp int
+	var championTotal, runnerUpTotal float64
+	
+	for rosterID, total := range championshipTotals {
+		if total > championTotal {
+			runnerUp = champion
+			runnerUpTotal = championTotal
+			champion = rosterID
+			championTotal = total
+		} else if total > runnerUpTotal {
+			runnerUp = rosterID
+			runnerUpTotal = total
+		}
+	}
+	
+	if champion == 0 || runnerUp == 0 {
+		return fmt.Errorf("could not determine championship results from semifinal winners")
+	}
+	
+	// Determine third place winner (higher 2-week total between semifinal losers)
+	var thirdPlace, fourthPlace int
+	var thirdPlaceTotal, fourthPlaceTotal float64
+	
+	for rosterID, total := range thirdPlaceTotals {
+		if total > thirdPlaceTotal {
+			fourthPlace = thirdPlace
+			fourthPlaceTotal = thirdPlaceTotal
+			thirdPlace = rosterID
+			thirdPlaceTotal = total
+		} else if total > fourthPlaceTotal {
+			fourthPlace = rosterID
+			fourthPlaceTotal = total
+		}
+	}
+	
+	if thirdPlace == 0 || fourthPlace == 0 {
+		return fmt.Errorf("could not determine third place results from semifinal losers")
+	}
+	
+	// Create championship result (2-week head-to-head between semifinal winners)
+	bracket.Championship = &PlayoffMatchup{
+		Week:        17, // Start week
+		MatchupID:   1,  // Combined matchup
+		Team1:       champion,
+		Team2:       runnerUp,
+		Team1Points: championTotal,
+		Team2Points: runnerUpTotal,
+		Winner:      champion,
+		Loser:       runnerUp,
+		GameType:    "championship",
+	}
+	
+	// Create third place result (2-week head-to-head between semifinal losers)
+	bracket.ThirdPlace = &PlayoffMatchup{
+		Week:        17, // Start week
+		MatchupID:   2,  // Different from championship
+		Team1:       thirdPlace,
+		Team2:       fourthPlace,
+		Team1Points: thirdPlaceTotal,
+		Team2Points: fourthPlaceTotal,
+		Winner:      thirdPlace,
+		Loser:       fourthPlace,
+		GameType:    "third_place",
+	}
+	bracket.HasThirdPlace = true
+	
+	h.logger.WithFields(map[string]interface{}{
+		"champion":           champion,
+		"champion_total":     championTotal,
+		"runner_up":          runnerUp,
+		"runner_up_total":    runnerUpTotal,
+		"third_place":        thirdPlace,
+		"third_place_total":  thirdPlaceTotal,
+		"fourth_place":       fourthPlace,
+		"fourth_place_total": fourthPlaceTotal,
+	}).Info("Processed 2-week championship (winners H2H) and third place game (losers H2H)")
+	
+	return nil
+}
+
+// contains checks if a slice contains a specific item
+func contains(slice []int, item int) bool {
+	for _, v := range slice {
+		if v == item {
+			return true
+		}
+	}
+	return false
+}
+
+// verifyTwoWeekChampionship checks if weeks 17-18 contain a 2-week championship
+func (h *LeagueHandler) verifyTwoWeekChampionship(leagueID string, playoffTeams map[int]int) bool {
+	// Check if the same 2 teams are playing in both weeks 17 and 18
+	var week17Teams, week18Teams []int
+	
+	for week := 17; week <= 18; week++ {
+		matchups, err := h.client.GetMatchups(leagueID, week)
+		if err != nil {
+			h.logger.WithField("week", week).Warn("Failed to get matchups for championship verification")
+			continue
+		}
+		
+		teamsThisWeek := make(map[int]bool)
+		for _, matchup := range matchups {
+			// Look for any teams that could be playing championship
+			// (not necessarily in original top 6, could be semifinal winners)
+			teamsThisWeek[matchup.RosterID] = true
+		}
+		
+		var teamList []int
+		for teamID := range teamsThisWeek {
+			teamList = append(teamList, teamID)
+		}
+		
+		if week == 17 {
+			week17Teams = teamList
+		} else {
+			week18Teams = teamList
+		}
+	}
+	
+	// Check if we have exactly 2 teams playing in both weeks
+	if len(week17Teams) >= 2 && len(week18Teams) >= 2 {
+		// Find common teams between weeks 17 and 18
+		commonTeams := 0
+		for _, team17 := range week17Teams {
+			for _, team18 := range week18Teams {
+				if team17 == team18 {
+					commonTeams++
+					break
+				}
+			}
+		}
+		
+		// If we have at least 2 common teams, this is likely a 2-week championship
+		if commonTeams >= 2 {
+			h.logger.WithFields(map[string]interface{}{
+				"week_17_teams": week17Teams,
+				"week_18_teams": week18Teams,
+				"common_teams":  commonTeams,
+			}).Info("Verified 2-week championship format")
+			return true
+		}
+	}
+	
+	return false
 }
 
 // generateRandomTiebreakerID generates a consistent random ID for tiebreaker purposes

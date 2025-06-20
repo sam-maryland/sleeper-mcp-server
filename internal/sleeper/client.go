@@ -27,6 +27,8 @@ type Client interface {
 	GetLeagueRosters(leagueID string) ([]Roster, error)
 	GetMatchups(leagueID string, week int) ([]Matchup, error)
 	GetTransactions(leagueID string, week int) ([]Transaction, error)
+	GetWinnersBracket(leagueID string) ([]BracketMatchup, error)
+	GetLosersBracket(leagueID string) ([]BracketMatchup, error)
 	
 	// Player methods
 	GetAllPlayers() (map[string]Player, error)
@@ -213,4 +215,28 @@ func (c *HTTPClient) GetTrendingPlayers(sport, trendType string, hours, limit in
 	}
 	
 	return trending, nil
+}
+
+// GetWinnersBracket retrieves the winners bracket for a league
+func (c *HTTPClient) GetWinnersBracket(leagueID string) ([]BracketMatchup, error) {
+	endpoint := fmt.Sprintf("/league/%s/winners_bracket", leagueID)
+	var bracket []BracketMatchup
+	
+	if err := c.makeRequest(endpoint, &bracket); err != nil {
+		return nil, fmt.Errorf("failed to get winners bracket: %w", err)
+	}
+	
+	return bracket, nil
+}
+
+// GetLosersBracket retrieves the losers bracket for a league
+func (c *HTTPClient) GetLosersBracket(leagueID string) ([]BracketMatchup, error) {
+	endpoint := fmt.Sprintf("/league/%s/losers_bracket", leagueID)
+	var bracket []BracketMatchup
+	
+	if err := c.makeRequest(endpoint, &bracket); err != nil {
+		return nil, fmt.Errorf("failed to get losers bracket: %w", err)
+	}
+	
+	return bracket, nil
 }
