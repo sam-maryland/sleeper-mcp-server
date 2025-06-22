@@ -19,6 +19,8 @@ type MockSleeperClient struct {
 	GetLeagueRostersFunc    func(leagueID string) ([]sleeper.Roster, error)
 	GetMatchupsFunc         func(leagueID string, week int) ([]sleeper.Matchup, error)
 	GetTransactionsFunc     func(leagueID string, week int) ([]sleeper.Transaction, error)
+	GetWinnersBracketFunc   func(leagueID string) ([]sleeper.BracketMatchup, error)
+	GetLosersBracketFunc    func(leagueID string) ([]sleeper.BracketMatchup, error)
 	GetAllPlayersFunc       func() (map[string]sleeper.Player, error)
 	GetTrendingPlayersFunc  func(sport, trendType string, hours, limit int) ([]sleeper.TrendingPlayer, error)
 }
@@ -82,6 +84,20 @@ func (m *MockSleeperClient) GetAllPlayers() (map[string]sleeper.Player, error) {
 func (m *MockSleeperClient) GetTrendingPlayers(sport, trendType string, hours, limit int) ([]sleeper.TrendingPlayer, error) {
 	if m.GetTrendingPlayersFunc != nil {
 		return m.GetTrendingPlayersFunc(sport, trendType, hours, limit)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockSleeperClient) GetWinnersBracket(leagueID string) ([]sleeper.BracketMatchup, error) {
+	if m.GetWinnersBracketFunc != nil {
+		return m.GetWinnersBracketFunc(leagueID)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockSleeperClient) GetLosersBracket(leagueID string) ([]sleeper.BracketMatchup, error) {
+	if m.GetLosersBracketFunc != nil {
+		return m.GetLosersBracketFunc(leagueID)
 	}
 	return nil, errors.New("not implemented")
 }
